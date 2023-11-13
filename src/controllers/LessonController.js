@@ -2,8 +2,6 @@ import { Lesson } from '../models/Lesson.js'
 import { pg } from '../db/knexConfig.js'
 import knex from 'knex'
 import { ApiError } from '../error/ApiError.js'
-import axios from 'axios'
-import _ from 'lodash'
 
 const ACTION_CREATED = 'CREATED'
 const ACTION_UPDATED = 'UPDATED'
@@ -16,7 +14,7 @@ export const LessonController = {
             const page = params.page || 1
             const limit = params.lessonsPerPage || 10
             let offset = limit * page - limit
-            const knexInstance = knex(pg);
+            const knexInstance = knex(pg)
             let query = Lesson(knexInstance)
             if (params) {
                 if (params.date) {
@@ -31,7 +29,6 @@ export const LessonController = {
                         // две даты через запятую - выбираем занятия за период
                         const [start, end] = params.date.split(',')
 
-                        //query = query.whereBetween('date', [start, end])
                         query = query.whereBetween('date', [start, end])
                     } else {
                         // одна дата - выбираем занятия на эту дату
@@ -142,5 +139,176 @@ export const LessonController = {
             }
         }
     },
+    post: async (req, resp, next) => {
+        try {
+            const { ...params } = req.body
+            console.log(params)
+            if (Object.keys(params).length === 0) {
+                return next(ApiError.badRequest("Отсутсвуют параметры для создания занятий"))
+            }
+            if (params.lessonsCount && params.lastDate) {
+                return next(ApiError.badRequest("Для создания занятия должен использоваться только один из параметров lessonCount или lastDate"))
+            }
 
+            if (params.lessonsCount > 300) {
+                return next(ApiError.badRequest("Максимальное количество занятий - 300"))
+            }
+            const isValidDayOfWeek = params.days.every(day => day >= 0 && day <= 6);
+            if (!isValidDayOfWeek) {
+                return next(ApiError.badRequest("Неверное значение дня недели"))
+            }
+
+            const knexInstance = knex(pg)
+            const formattedFirstDate = new Date(params.firstDate)
+
+            const lessons = []
+            const lessonTeachers = []
+
+            let currentDate = formattedFirstDate
+            const nextYearDate = new Date(formattedFirstDate);
+            nextYearDate.setFullYear(nextYearDate.getFullYear() + 1)
+
+            if (params.lessonsCount) {
+                for (let i = 0; i < params.lessonsCount; i++) {
+
+                    const id = await insertTables(currentDate, params.days, params.title, params.teacherIds, knexInstance)
+                    if (id) {
+                        lessons.push(id)
+                    }
+                    // const dayOfWeek = currentDate.getUTCDay()
+                    // if (params.days.includes(dayOfWeek)) {
+                    //     const existingLesson = await knexInstance('lessons')
+                    //         .where({ title: params.title, date: currentDate })
+                    //         .first()
+
+                    //     if (!existingLesson) {
+                    //         const lesson = {
+
+                    //             title: params.title,
+                    //             date: currentDate,
+
+                    //         }
+                    //         console.log(lesson)
+
+                    //         const lessonId = await knexInstance('lessons')
+                    //             .insert(lesson, 'id')
+                    //         console.log("lessonId", lessonId)
+                    //         for (const teacherId of params.teacherIds) {
+                    //             await knexInstance('lesson_teachers').insert({
+                    //                 lesson_id: lessonId[0].id,
+                    //                 teacher_id: teacherId,
+                    //             })
+
+                    //         }
+                    //         lessons.push(lessonId)
+                    //     }
+                    // }
+
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+            }
+            if (params.lastDate) {
+                while (currentDate <= new Date(params.lastDate) && lessons.length < 300) {
+                    const id = await insertTables(currentDate, params.days, params.title, params.teacherIds, knexInstance)
+                    if (id) {
+                        lessons.push(id)
+                    }
+                    // const dayOfWeek = currentDate.getUTCDay()
+                    // if (params.days.includes(dayOfWeek)) {
+                    //     const existingLesson = await knexInstance('lessons')
+                    //         .where({ title: params.title, date: currentDate })
+                    //         .first()
+
+                    //     if (!existingLesson) {
+                    //         const lesson = {
+
+                    //             title: params.title,
+                    //             date: currentDate,
+
+                    //         }
+                    //         console.log(lesson)
+
+                    //         const lessonId = await knexInstance('lessons')
+                    //             .insert(lesson, 'id')
+                    //         console.log("lessonId", lessonId)
+                    //         for (const teacherId of params.teacherIds) {
+                    //             await knexInstance('lesson_teachers').insert({
+                    //                 lesson_id: lessonId[0].id,
+                    //                 teacher_id: teacherId,
+                    //             })
+
+                    //         }
+                    //         lessons.push(lessonId)
+                    //     }
+                    //}
+
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+            }
+            //     const lessonId = await knexInstance('lessons')
+            //     .insert(lessons, 'id')
+            // console.log(lessonId)
+            // for (const lesson of lessonId) {
+            //     for (const teacherId of params.teacherIds) {
+            //         lessonTeachers.push({
+            //             lesson_id: lesson.id,
+            //             teacher_id: teacherId,
+            //         })
+            //     }
+            // }
+
+
+            // const lessonTeachers = []
+            // for (const lessonId of lessonIds) {
+            //     for (const teacherId of params.teacherIds) {
+            //         lessonTeachers.push({ lesson_id: lessonId, teacher_id: teacherId })
+            //     }
+            // }
+
+
+            //await knexInstance('lesson_teachers').insert(lessonTeachers)
+
+            //await knexInstance('lessons').insert(lessons)
+
+            resp.json(lessons)
+
+        } catch (e) {
+            console.log(e)
+        }
+    }
+
+}
+
+
+const insertTables = async (currentDate, days, title, teacherIds, knexInstance) => {
+    const dayOfWeek = currentDate.getUTCDay()
+    if (days.includes(dayOfWeek)) {
+        const existingLesson = await knexInstance('lessons')
+            .where({ title, date: currentDate })
+            .first()
+
+        if (!existingLesson) {
+            const lesson = {
+
+                title,
+                date: currentDate,
+
+            }
+            console.log(lesson)
+
+            const lessonId = await knexInstance('lessons')
+                .insert(lesson, 'id')
+            console.log("lessonId", lessonId)
+            for (const teacherId of teacherIds) {
+                await knexInstance('lesson_teachers').insert({
+                    lesson_id: lessonId[0].id,
+                    teacher_id: teacherId,
+                })
+
+            }
+            return lessonId
+        }
+    }
+
+    //currentDate.setDate(currentDate.getDate() + 1);
 }
