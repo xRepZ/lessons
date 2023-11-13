@@ -3,9 +3,6 @@ import { pg } from '../db/knexConfig.js'
 import knex from 'knex'
 import { ApiError } from '../error/ApiError.js'
 
-const ACTION_CREATED = 'CREATED'
-const ACTION_UPDATED = 'UPDATED'
-
 
 export const LessonController = {
     get: async (req, resp, next) => {
@@ -66,8 +63,7 @@ export const LessonController = {
 
                 }
             }
-            // const lessons = await query.offset(offset).limit(limit)
-            // return resp.json(lessons)
+
             const lessonsQuery = query.clone();
 
             const lessons = await lessonsQuery
@@ -165,111 +161,30 @@ export const LessonController = {
             const lessonTeachers = []
 
             let currentDate = formattedFirstDate
-            const nextYearDate = new Date(formattedFirstDate);
+            const nextYearDate = new Date(formattedFirstDate)
             nextYearDate.setFullYear(nextYearDate.getFullYear() + 1)
 
             if (params.lessonsCount) {
-                for (let i = 0; i < params.lessonsCount; i++) {
+                //for (let i = 0; i < params.lessonsCount; i++) {
+                while (currentDate <= nextYearDate && lessons.length < 300 && lessons.length < params.lessonsCount) {
 
                     const id = await insertTables(currentDate, params.days, params.title, params.teacherIds, knexInstance)
                     if (id) {
                         lessons.push(id)
                     }
-                    // const dayOfWeek = currentDate.getUTCDay()
-                    // if (params.days.includes(dayOfWeek)) {
-                    //     const existingLesson = await knexInstance('lessons')
-                    //         .where({ title: params.title, date: currentDate })
-                    //         .first()
-
-                    //     if (!existingLesson) {
-                    //         const lesson = {
-
-                    //             title: params.title,
-                    //             date: currentDate,
-
-                    //         }
-                    //         console.log(lesson)
-
-                    //         const lessonId = await knexInstance('lessons')
-                    //             .insert(lesson, 'id')
-                    //         console.log("lessonId", lessonId)
-                    //         for (const teacherId of params.teacherIds) {
-                    //             await knexInstance('lesson_teachers').insert({
-                    //                 lesson_id: lessonId[0].id,
-                    //                 teacher_id: teacherId,
-                    //             })
-
-                    //         }
-                    //         lessons.push(lessonId)
-                    //     }
-                    // }
 
                     currentDate.setDate(currentDate.getDate() + 1);
                 }
             }
             if (params.lastDate) {
-                while (currentDate <= new Date(params.lastDate) && lessons.length < 300) {
+                while (currentDate <= new Date(params.lastDate) && lessons.length < 300 && currentDate <= nextYearDate) {
                     const id = await insertTables(currentDate, params.days, params.title, params.teacherIds, knexInstance)
                     if (id) {
                         lessons.push(id)
                     }
-                    // const dayOfWeek = currentDate.getUTCDay()
-                    // if (params.days.includes(dayOfWeek)) {
-                    //     const existingLesson = await knexInstance('lessons')
-                    //         .where({ title: params.title, date: currentDate })
-                    //         .first()
-
-                    //     if (!existingLesson) {
-                    //         const lesson = {
-
-                    //             title: params.title,
-                    //             date: currentDate,
-
-                    //         }
-                    //         console.log(lesson)
-
-                    //         const lessonId = await knexInstance('lessons')
-                    //             .insert(lesson, 'id')
-                    //         console.log("lessonId", lessonId)
-                    //         for (const teacherId of params.teacherIds) {
-                    //             await knexInstance('lesson_teachers').insert({
-                    //                 lesson_id: lessonId[0].id,
-                    //                 teacher_id: teacherId,
-                    //             })
-
-                    //         }
-                    //         lessons.push(lessonId)
-                    //     }
-                    //}
-
                     currentDate.setDate(currentDate.getDate() + 1);
                 }
             }
-            //     const lessonId = await knexInstance('lessons')
-            //     .insert(lessons, 'id')
-            // console.log(lessonId)
-            // for (const lesson of lessonId) {
-            //     for (const teacherId of params.teacherIds) {
-            //         lessonTeachers.push({
-            //             lesson_id: lesson.id,
-            //             teacher_id: teacherId,
-            //         })
-            //     }
-            // }
-
-
-            // const lessonTeachers = []
-            // for (const lessonId of lessonIds) {
-            //     for (const teacherId of params.teacherIds) {
-            //         lessonTeachers.push({ lesson_id: lessonId, teacher_id: teacherId })
-            //     }
-            // }
-
-
-            //await knexInstance('lesson_teachers').insert(lessonTeachers)
-
-            //await knexInstance('lessons').insert(lessons)
-
             resp.json(lessons)
 
         } catch (e) {
@@ -309,6 +224,4 @@ const insertTables = async (currentDate, days, title, teacherIds, knexInstance) 
             return lessonId
         }
     }
-
-    //currentDate.setDate(currentDate.getDate() + 1);
 }
