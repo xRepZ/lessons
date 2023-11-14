@@ -41,11 +41,15 @@ export const LessonController = {
                         this.select(knexInstance.raw(1))
                             .from('lesson_teachers')
                             .whereRaw('lesson_teachers.lesson_id = lessons.id')
-                            .whereIn('lesson_teachers.teacher_id', teacherIdsArr);
+                            .whereIn('lesson_teachers.teacher_id', teacherIdsArr)
                     })
                 }
                 if (params.studentsCount) {
+   
                     if (params.studentsCount.includes(',')) {
+                        if (params.studentsCount.split(',').length > 2) {
+                            return next(ApiError.badRequest("диапазон студентов может состоять только из двух значений"))
+                        }
                         const [start, end] = params.studentsCount.split(',')
                         query = query
                             .join('lesson_students', 'lessons.id', 'lesson_students.lesson_id')
@@ -64,14 +68,14 @@ export const LessonController = {
                 }
             }
 
-            const lessonsQuery = query.clone();
+            const lessonsQuery = query.clone()
 
             const lessons = await lessonsQuery
                 .clone()
                 .orderBy('lessons.id', 'asc')
                 .offset(offset)
                 .limit(limit)
-                .select('lessons.id', 'lessons.date', 'lessons.title', 'lessons.status');
+                .select('lessons.id', 'lessons.date', 'lessons.title', 'lessons.status')
 
             const lessonIds = lessons.map(lesson => lesson.id)
 
@@ -81,13 +85,13 @@ export const LessonController = {
                     .from('lesson_students')
                     .join('students', 'students.id', 'lesson_students.student_id')
                     .whereIn('lesson_students.lesson_id', lessonIds),
-                // .groupBy('lesson_students.lesson_id', 'students.id', 'students.name', 'lesson_students.visit'),
+
                 knexInstance
                     .select('lesson_teachers.lesson_id', 'teachers.id', 'teachers.name')
                     .from('lesson_teachers')
                     .join('teachers', 'teachers.id', 'lesson_teachers.teacher_id')
                     .whereIn('lesson_teachers.lesson_id', lessonIds)
-                // .groupBy('lesson_teachers.lesson_id', 'teachers.id', 'teachers.name')
+
             ])
 
             const formattedLessons = lessons.map(lesson => ({
@@ -101,9 +105,9 @@ export const LessonController = {
             }))
 
             for (const student of students) {
-                const lesson = formattedLessons.find(lesson => lesson.id === student.lesson_id);
+                const lesson = formattedLessons.find(lesson => lesson.id === student.lesson_id)
                 if (lesson) {
-                    lesson.visitCount++;
+                    lesson.visitCount++
                     lesson.students.push({
                         id: student.id,
                         name: student.name,
@@ -113,7 +117,7 @@ export const LessonController = {
             }
 
             for (const teacher of teachers) {
-                const lesson = formattedLessons.find(lesson => lesson.id === teacher.lesson_id);
+                const lesson = formattedLessons.find(lesson => lesson.id === teacher.lesson_id)
                 if (lesson) {
                     lesson.teachers.push({
                         id: teacher.id,
@@ -133,13 +137,27 @@ export const LessonController = {
                 if (params.date) {
                     return next(ApiError.badRequest("Неверно указан формат даты"))
                 }
+                if (params.status) {
+                    return next(ApiError.badRequest("Неверно указан параметр status"))
+                }
+                if (params.teacherIds) {
+                    return next(ApiError.badRequest("Неверно указан параметр teacherIds"))
+                }
+                if (params.studentsCount) {
+                    return next(ApiError.badRequest("Неверно указан параметр studentsCount"))
+                }
+                if (params.page) {
+                    return next(ApiError.badRequest("Неверно указан параметр page"))
+                }
+                if (params.lessonsPerPage) {
+                    return next(ApiError.badRequest("Неверно указан параметр lessonsPerPage"))
+                }
             }
         }
     },
     post: async (req, resp, next) => {
         try {
             const { ...params } = req.body
-            console.log(params)
             if (Object.keys(params).length === 0) {
                 return next(ApiError.badRequest("Отсутсвуют параметры для создания занятий"))
             }
@@ -150,7 +168,7 @@ export const LessonController = {
             if (params.lessonsCount > 300) {
                 return next(ApiError.badRequest("Максимальное количество занятий - 300"))
             }
-            const isValidDayOfWeek = params.days.every(day => day >= 0 && day <= 6);
+            const isValidDayOfWeek = params.days.every(day => day >= 0 && day <= 6)
             if (!isValidDayOfWeek) {
                 return next(ApiError.badRequest("Неверное значение дня недели"))
             }
@@ -165,14 +183,12 @@ export const LessonController = {
             nextYearDate.setFullYear(nextYearDate.getFullYear() + 1)
 
             if (params.lessonsCount) {
-                //for (let i = 0; i < params.lessonsCount; i++) {
                 while (currentDate <= nextYearDate && lessons.length < 300 && lessons.length < params.lessonsCount) {
 
                     const lsn = await insertTables(currentDate, params.days, params.title, params.teacherIds, knexInstance)
                     if (lsn) {
                         lessons.push(lsn)
                     }
-                    console.log('push')
                     currentDate.setDate(currentDate.getDate() + 1)
                 }
             }
@@ -185,7 +201,6 @@ export const LessonController = {
                     currentDate.setDate(currentDate.getDate() + 1)
                 }
             }
-            console.log(lessons)
             const titles = lessons.map(lesson => lesson.title)
             const dates = lessons.map(lesson => lesson.date)
 
@@ -200,7 +215,6 @@ export const LessonController = {
 
             const lessonId = await knexInstance.batchInsert('lessons', lessons).returning('id')
 
-            console.log("lessonId", lessonId)
             const lessonTeachers = []
             for (const lesson of lessonId) {
                 for (const teacher of params.teacherIds) {
@@ -210,13 +224,13 @@ export const LessonController = {
                     })
                 }
             }
-            console.log(lessonTeachers)
             await knexInstance.batchInsert('lesson_teachers', lessonTeachers)
 
             resp.json(lessons)
 
         } catch (e) {
             console.log(e)
+            return next(ApiError.badRequest("Параметры указаны неверно"))
         }
     }
 
@@ -230,12 +244,10 @@ const insertTables = (currentDate, days, title, teacherIds, knexInstance) => {
         const date = new Date(currentDate)
 
         const lesson = {
-
             title,
             date,
 
         }
-        console.log(lesson)
         return lesson
     }
 }

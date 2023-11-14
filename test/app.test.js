@@ -57,7 +57,7 @@ describe('GET /api/', () => {
             .get('/api/')
             .query({ status: 1 })
             .end((err, res) => {
-                expect(err).to.be.null;
+                expect(err).to.be.null
                 expect(res.status).to.equal(200)
                 expect(res.body).to.be.an('array')
                 const lessons = res.body
@@ -83,11 +83,11 @@ describe('GET /api/', () => {
             .get('/api/')
             .query({ studentsCount: '1,2' })
             .end((err, res) => {
-                expect(err).to.be.null;
-                expect(res.status).to.equal(200);
-                expect(res.body).to.be.an('array');
+                expect(err).to.be.null
+                expect(res.status).to.equal(200)
+                expect(res.body).to.be.an('array')
                 const lessons = res.body
-                expect(lessons.every(lesson => lesson.students.length >= 1 && lesson.students.length <= 2)).to.be.true;
+                expect(lessons.every(lesson => lesson.students.length >= 1 && lesson.students.length <= 2)).to.be.true
                 done()
             })
     })
@@ -100,9 +100,73 @@ describe('GET /api/', () => {
                 expect(err).to.be.null
                 expect(res.status).to.equal(200)
                 expect(res.body).to.be.an('array')
-                const lessons = res.body;
+                const lessons = res.body
                 expect(lessons.length).to.equal(3)
                 done()
             })
     })
+
+    it('should return lessons with all query params entered', (done) => {
+        request(app)
+            .get('/api/')
+            .query({date: ['2022-03-03,2023-12-04'], status: 1, teacherIds: '1,2', studentsCount: '1,2', page: 1, lessonsPerPage: 3 })
+            .end((err, res) => {
+                expect(err).to.be.null
+                expect(res.status).to.equal(200)
+                expect(res.body).to.be.an('array')
+                const lessons = res.body
+                expect(lessons.length > 0)
+                done()
+            })
+    })
+
+    it('should return eror 400 - wrong date param', (done) => {
+        request(app)
+            .get('/api/')
+            .query({date: ['2022-03-03,2023-12-04,2024-06-07'], status: 1, teacherIds: '1,2', studentsCount: '1,2', page: 1, lessonsPerPage: 3 })
+            .end((err, res) => {
+                expect(err).to.be.null
+                expect(res.status).to.equal(400)
+                expect(res.body).to.have.property('error')
+                done()
+            })
+    })
+    it('should return eror 400 - wrong status param', (done) => {
+        request(app)
+            .get('/api/')
+            .query({date: ['2022-03-03,2023-12-04'], status: ["ssds"], teacherIds: '1,2', studentsCount: '1,2', page: 1, lessonsPerPage: 3 })
+            .end((err, res) => {
+                expect(err).to.be.null
+                expect(res.status).to.equal(400)
+                expect(res.body).to.have.property('error')
+                done()
+            })
+    })
+    it('should return eror 400 - wrong teacherIds param', (done) => {
+        request(app)
+            .get('/api/')
+            .query({date: ['2022-03-03,2023-12-04'], status: 1, teacherIds: 'first,2', studentsCount: '1,2', page: 1, lessonsPerPage: 3 })
+            .end((err, res) => {
+                expect(err).to.be.null
+                expect(res.status).to.equal(400)
+                expect(res.body).to.have.property('error')
+                done()
+            })
+    })
+    it('should return eror 400 - wrong studentsCount param', (done) => {
+        request(app)
+            .get('/api/')
+            .query({date: ['2022-03-03,2023-12-04'], status: 1, teacherIds: '1,2', studentsCount: '1,2,3,4,5,6', page: 1, lessonsPerPage: 3 })
+            .end((err, res) => {
+                expect(err).to.be.null
+                expect(res.status).to.equal(400)
+                expect(res.body).to.have.property('error')
+                done()
+            })
+    })
+
+
+
 })
+
+
