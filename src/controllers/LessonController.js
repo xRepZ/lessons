@@ -9,7 +9,7 @@ export const LessonController = {
         try {
             const { ...params } = req.query
             const page = params.page || 1
-            const limit = params.lessonsPerPage || 10
+            const limit = params.lessonsPerPage || 5
             let offset = limit * page - limit
             const knexInstance = knex(pg)
             let query = Lesson(knexInstance)
@@ -77,23 +77,24 @@ export const LessonController = {
 
             const [students, teachers] = await Promise.all([
                 knexInstance
-                    .distinct('lesson_students.lesson_id', 'students.id', 'students.name', 'lesson_students.visit')
+                    .select('lesson_students.lesson_id', 'students.id', 'students.name', 'lesson_students.visit')
                     .from('lesson_students')
-                    .whereIn('lesson_students.lesson_id', lessonIds)
-                    .join('students', 'students.id', 'lesson_students.student_id'),
-
+                    .join('students', 'students.id', 'lesson_students.student_id')
+                    .whereIn('lesson_students.lesson_id', lessonIds),
+                // .groupBy('lesson_students.lesson_id', 'students.id', 'students.name', 'lesson_students.visit'),
                 knexInstance
-                    .distinct('lesson_teachers.lesson_id', 'teachers.id', 'teachers.name')
+                    .select('lesson_teachers.lesson_id', 'teachers.id', 'teachers.name')
                     .from('lesson_teachers')
-                    .whereIn('lesson_teachers.lesson_id', lessonIds)
                     .join('teachers', 'teachers.id', 'lesson_teachers.teacher_id')
-            ]);
+                    .whereIn('lesson_teachers.lesson_id', lessonIds)
+                // .groupBy('lesson_teachers.lesson_id', 'teachers.id', 'teachers.name')
+            ])
 
             const formattedLessons = lessons.map(lesson => ({
                 id: lesson.id,
                 date: lesson.date.toLocaleDateString(),
                 title: lesson.title,
-                status: lesson.status,
+                status: Number(lesson.status),
                 visitCount: 0,
                 students: [],
                 teachers: [],
@@ -158,7 +159,6 @@ export const LessonController = {
             const formattedFirstDate = new Date(params.firstDate)
 
             const lessons = []
-            const lessonTeachers = []
 
             let currentDate = formattedFirstDate
             const nextYearDate = new Date(formattedFirstDate)
@@ -168,23 +168,51 @@ export const LessonController = {
                 //for (let i = 0; i < params.lessonsCount; i++) {
                 while (currentDate <= nextYearDate && lessons.length < 300 && lessons.length < params.lessonsCount) {
 
-                    const id = await insertTables(currentDate, params.days, params.title, params.teacherIds, knexInstance)
-                    if (id) {
-                        lessons.push(id)
+                    const lsn = await insertTables(currentDate, params.days, params.title, params.teacherIds, knexInstance)
+                    if (lsn) {
+                        lessons.push(lsn)
                     }
-
-                    currentDate.setDate(currentDate.getDate() + 1);
+                    console.log('push')
+                    currentDate.setDate(currentDate.getDate() + 1)
                 }
             }
             if (params.lastDate) {
                 while (currentDate <= new Date(params.lastDate) && lessons.length < 300 && currentDate <= nextYearDate) {
-                    const id = await insertTables(currentDate, params.days, params.title, params.teacherIds, knexInstance)
-                    if (id) {
-                        lessons.push(id)
+                    const lsn = await insertTables(currentDate, params.days, params.title, params.teacherIds, knexInstance)
+                    if (lsn) {
+                        lessons.push(lsn)
                     }
-                    currentDate.setDate(currentDate.getDate() + 1);
+                    currentDate.setDate(currentDate.getDate() + 1)
                 }
             }
+            console.log(lessons)
+            const titles = lessons.map(lesson => lesson.title)
+            const dates = lessons.map(lesson => lesson.date)
+
+            const exists = await knexInstance('lessons')
+                .whereIn('title', titles)
+                .whereIn('date', dates)
+                .select(knexInstance.raw('exists (select 1)'))
+                .first()
+            if (exists) {
+                return next(ApiError.badRequest("Уроки по таким датам уже существуют"))
+            }
+
+            const lessonId = await knexInstance.batchInsert('lessons', lessons).returning('id')
+
+            console.log("lessonId", lessonId)
+            const lessonTeachers = []
+            for (const lesson of lessonId) {
+                for (const teacher of params.teacherIds) {
+                    lessonTeachers.push({
+                        lesson_id: lesson.id,
+                        teacher_id: teacher,
+                    })
+                }
+            }
+            console.log(lessonTeachers)
+            await knexInstance.batchInsert('lesson_teachers', lessonTeachers)
+
             resp.json(lessons)
 
         } catch (e) {
@@ -195,33 +223,19 @@ export const LessonController = {
 }
 
 
-const insertTables = async (currentDate, days, title, teacherIds, knexInstance) => {
+const insertTables = (currentDate, days, title, teacherIds, knexInstance) => {
     const dayOfWeek = currentDate.getUTCDay()
+
     if (days.includes(dayOfWeek)) {
-        const existingLesson = await knexInstance('lessons')
-            .where({ title, date: currentDate })
-            .first()
+        const date = new Date(currentDate)
 
-        if (!existingLesson) {
-            const lesson = {
+        const lesson = {
 
-                title,
-                date: currentDate,
+            title,
+            date,
 
-            }
-            console.log(lesson)
-
-            const lessonId = await knexInstance('lessons')
-                .insert(lesson, 'id')
-            console.log("lessonId", lessonId)
-            for (const teacherId of teacherIds) {
-                await knexInstance('lesson_teachers').insert({
-                    lesson_id: lessonId[0].id,
-                    teacher_id: teacherId,
-                })
-
-            }
-            return lessonId
         }
+        console.log(lesson)
+        return lesson
     }
 }
