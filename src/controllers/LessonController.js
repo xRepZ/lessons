@@ -45,15 +45,20 @@ export const LessonController = {
                     })
                 }
                 if (params.studentsCount) {
-   
+
                     if (params.studentsCount.includes(',')) {
                         if (params.studentsCount.split(',').length > 2) {
                             return next(ApiError.badRequest("диапазон студентов может состоять только из двух значений"))
                         }
                         const [start, end] = params.studentsCount.split(',')
+                        // query = query
+                        //     .join('lesson_students', 'lessons.id', 'lesson_students.lesson_id')
+                        //     .join('students', 'lesson_students.student_id', 'students.id')
+                        //     .groupBy('lessons.id')
+                        //     .havingRaw(`COUNT(lesson_students.student_id) >= ${start} AND COUNT(lesson_students.student_id) <= ${end}`)
                         query = query
-                            .join('lesson_students', 'lessons.id', 'lesson_students.lesson_id')
-                            .join('students', 'lesson_students.student_id', 'students.id')
+                            .leftJoin('lesson_students', 'lessons.id', 'lesson_students.lesson_id')
+                            .leftJoin('students', 'lesson_students.student_id', 'students.id')
                             .groupBy('lessons.id')
                             .havingRaw(`COUNT(lesson_students.student_id) >= ${start} AND COUNT(lesson_students.student_id) <= ${end}`)
                     }
@@ -172,6 +177,12 @@ export const LessonController = {
             if (!isValidDayOfWeek) {
                 return next(ApiError.badRequest("Неверное значение дня недели"))
             }
+            if (params.firstDate) {
+                const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+                if (!dateRegex.test(params.firstDate)){
+                    return next(ApiError.badRequest("Неверный формат ввода даты"))
+                }
+            }
 
             const knexInstance = knex(pg)
             const formattedFirstDate = new Date(params.firstDate)
@@ -226,7 +237,7 @@ export const LessonController = {
             }
             await knexInstance.batchInsert('lesson_teachers', lessonTeachers)
 
-            resp.json(lessons)
+            resp.json(lessonId)
 
         } catch (e) {
             console.log(e)
